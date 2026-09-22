@@ -1,23 +1,20 @@
 const { Bot } = require("grammy");
 
-if (!process.env.BOT_TOKEN) {
-  console.error("Falta la variable BOT_TOKEN");
-  console.error("--- DIAGNOSTICO TEMPORAL ---");
-  const nombres = Object.keys(process.env);
-  console.error("Total de variables recibidas:", nombres.length);
-  console.error("Nombres de variables recibidas:", nombres.join(", "));
-  const parecidas = nombres.filter((n) => n.toUpperCase().includes("BOT") || n.toUpperCase().includes("TOKEN"));
-  console.error("Variables que contienen BOT o TOKEN:", parecidas.length ? parecidas.join(", ") : "ninguna");
-  console.error("--- FIN DIAGNOSTICO ---");
+const token = process.env.BOT_TOKEN;
+
+if (!token) {
+  console.error("ERROR: no llegó la variable BOT_TOKEN al contenedor.");
   process.exit(1);
 }
 
-const bot = new Bot(process.env.BOT_TOKEN);
+console.log("Token recibido, longitud:", token.length, "caracteres");
 
-bot.command("start", (ctx) => ctx.reply("¡Hola! Estoy funcionando 🚗"));
+const bot = new Bot(token);
+
+bot.command("start", (ctx) => ctx.reply("¡Hola! Driva está funcionando 🚗"));
 bot.on("message", (ctx) => ctx.reply("Recibí: " + (ctx.message.text || "tu mensaje")));
 
 bot.catch((err) => console.error("Error del bot:", err.message));
 
 bot.start();
-console.log("Bot iniciado");
+console.log("Bot iniciado correctamente");
