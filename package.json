@@ -1,5 +1,5 @@
 {
-  "name": "driva_",
+  "name": "driva",
   "version": "1.0.0",
   "description": "Bot de seguridad para conductoras",
   "main": "index.js",
@@ -10,6 +10,7 @@
     "node": ">=18"
   },
   "dependencies": {
-    "grammy": "^1.30.0"
+    "grammy": "^1.30.0",
+    "pg": "^8.13.0"
   }
 }
