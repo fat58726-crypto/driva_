@@ -115,72 +115,6 @@ bot.command("perfil", async (ctx) => {
   }
 });
 
-bot.on("message:text", async (ctx) => {
-  const userId = ctx.from.id;
-  const texto = ctx.message.text.trim();
-
-  if (texto.startsWith("/")) return; // los comandos ya se manejaron arriba
-
-  const estado = registrosEnCurso.get(userId);
-  if (!estado) {
-    ctx.reply("No entendí eso. Escribe /registro para registrarte o /perfil para ver tus datos.");
-    return;
-  }
-
-  const pasoActual = PASOS[estado.paso];
-
-  if (pasoActual === "nombre") {
-    estado.datos.nombre = texto;
-    estado.paso++;
-    ctx.reply("Perfecto. ¿Cuáles son tus placas?");
-    return;
-  }
-
-  if (pasoActual === "placas") {
-    estado.datos.placas = texto;
-    estado.paso++;
-    ctx.reply("¿Cuál es tu tipo de sangre? (ejemplo: O+, A-, etc.)");
-    return;
-  }
-
-  if (pasoActual === "tipo_sangre") {
-    estado.datos.tipo_sangre = texto;
-    estado.paso++;
-    ctx.reply("Por último, escribe el nombre y teléfono de tu contacto de confianza, separados por una coma.\nEjemplo: Laura Pérez, 5512345678");
-    return;
-  }
-
-  if (pasoActual === "contacto") {
-    const partes = texto.split(",");
-    if (partes.length < 2) {
-      ctx.reply("Necesito el nombre y el teléfono separados por una coma. Ejemplo: Laura Pérez, 5512345678");
-      return;
-    }
-    const contactoNombre = partes[0].trim();
-    const contactoTelefono = partes.slice(1).join(",").trim();
-
-    try {
-      await pool.query(
-        `INSERT INTO conductoras (telegram_id, nombre, placas, tipo_sangre, contacto_nombre, contacto_telefono)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         ON CONFLICT (telegram_id) DO UPDATE SET
-           nombre = EXCLUDED.nombre,
-           placas = EXCLUDED.placas,
-           tipo_sangre = EXCLUDED.tipo_sangre,
-           contacto_nombre = EXCLUDED.contacto_nombre,
-           contacto_telefono = EXCLUDED.contacto_telefono`,
-        [userId, estado.datos.nombre, estado.datos.placas, estado.datos.tipo_sangre, contactoNombre, contactoTelefono]
-      );
-      registrosEnCurso.delete(userId);
-      ctx.reply("¡Listo! Quedaste registrada ✅\n\nEscribe /perfil para ver tus datos.");
-    } catch (err) {
-      console.error("Error al guardar conductora:", err.message);
-      ctx.reply("Hubo un problema al guardar tu registro. Intenta de nuevo con /registro.");
-    }
-    return;
-  }
-});
-
 async function estaRegistrada(telegramId) {
   const r = await pool.query("SELECT 1 FROM conductoras WHERE telegram_id = $1", [telegramId]);
   return r.rows.length > 0;
@@ -254,6 +188,73 @@ bot.command("activar_alertas", async (ctx) => {
   );
   ctx.reply("Listo, este grupo va a recibir las alertas de seguridad.");
 });
+
+bot.on("message:text", async (ctx) => {
+  const userId = ctx.from.id;
+  const texto = ctx.message.text.trim();
+
+  if (texto.startsWith("/")) return; // los comandos ya se manejaron arriba
+
+  const estado = registrosEnCurso.get(userId);
+  if (!estado) {
+    ctx.reply("No entendí eso. Escribe /registro para registrarte o /perfil para ver tus datos.");
+    return;
+  }
+
+  const pasoActual = PASOS[estado.paso];
+
+  if (pasoActual === "nombre") {
+    estado.datos.nombre = texto;
+    estado.paso++;
+    ctx.reply("Perfecto. ¿Cuáles son tus placas?");
+    return;
+  }
+
+  if (pasoActual === "placas") {
+    estado.datos.placas = texto;
+    estado.paso++;
+    ctx.reply("¿Cuál es tu tipo de sangre? (ejemplo: O+, A-, etc.)");
+    return;
+  }
+
+  if (pasoActual === "tipo_sangre") {
+    estado.datos.tipo_sangre = texto;
+    estado.paso++;
+    ctx.reply("Por último, escribe el nombre y teléfono de tu contacto de confianza, separados por una coma.\nEjemplo: Laura Pérez, 5512345678");
+    return;
+  }
+
+  if (pasoActual === "contacto") {
+    const partes = texto.split(",");
+    if (partes.length < 2) {
+      ctx.reply("Necesito el nombre y el teléfono separados por una coma. Ejemplo: Laura Pérez, 5512345678");
+      return;
+    }
+    const contactoNombre = partes[0].trim();
+    const contactoTelefono = partes.slice(1).join(",").trim();
+
+    try {
+      await pool.query(
+        `INSERT INTO conductoras (telegram_id, nombre, placas, tipo_sangre, contacto_nombre, contacto_telefono)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (telegram_id) DO UPDATE SET
+           nombre = EXCLUDED.nombre,
+           placas = EXCLUDED.placas,
+           tipo_sangre = EXCLUDED.tipo_sangre,
+           contacto_nombre = EXCLUDED.contacto_nombre,
+           contacto_telefono = EXCLUDED.contacto_telefono`,
+        [userId, estado.datos.nombre, estado.datos.placas, estado.datos.tipo_sangre, contactoNombre, contactoTelefono]
+      );
+      registrosEnCurso.delete(userId);
+      ctx.reply("¡Listo! Quedaste registrada ✅\n\nEscribe /perfil para ver tus datos.");
+    } catch (err) {
+      console.error("Error al guardar conductora:", err.message);
+      ctx.reply("Hubo un problema al guardar tu registro. Intenta de nuevo con /registro.");
+    }
+    return;
+  }
+});
+
 
 async function guardarUbicacion(userId, lat, lng) {
   const activo = await turnoActivo(userId);
