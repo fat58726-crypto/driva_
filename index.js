@@ -1,8 +1,10 @@
 const { Bot } = require("grammy");
 const { Pool } = require("pg");
+const express = require("express");
 
 const token = process.env.BOT_TOKEN;
 const databaseUrl = process.env.DATABASE_URL;
+const mapKey = process.env.MAP_KEY;
 
 if (!token) {
   console.error("ERROR: no llegó la variable BOT_TOKEN al contenedor.");
@@ -10,6 +12,10 @@ if (!token) {
 }
 if (!databaseUrl) {
   console.error("ERROR: no llegó la variable DATABASE_URL al contenedor.");
+  process.exit(1);
+}
+if (!mapKey) {
+  console.error("ERROR: no llegó la variable MAP_KEY al contenedor.");
   process.exit(1);
 }
 
@@ -280,10 +286,120 @@ bot.on("edited_message:location", async (ctx) => {
 
 bot.catch((err) => console.error("Error del bot:", err.message));
 
+// --- Mapa web ---
+// Página protegida por una clave en la URL (?clave=...). No es una cuenta de
+// usuario real, es solo para que el enlace no quede totalmente público.
+
+const app = express();
+
+function claveValida(req) {
+  return req.query.clave && req.query.clave === mapKey;
+}
+
+app.get("/mapa", (req, res) => {
+  if (!claveValida(req)) {
+    res.status(403).send("Acceso denegado. Falta la clave correcta en el enlace.");
+    return;
+  }
+  const clave = encodeURIComponent(req.query.clave);
+  res.send(`<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Driva - Mapa en vivo</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+  html, body { margin: 0; height: 100%; font-family: sans-serif; }
+  #mapa { height: 100%; width: 100%; }
+  #estado { position: absolute; top: 10px; left: 50px; z-index: 1000; background: white; padding: 6px 12px; border-radius: 6px; box-shadow: 0 1px 4px rgba(0,0,0,0.3); font-size: 14px; }
+</style>
+</head>
+<body>
+<div id="estado">Cargando...</div>
+<div id="mapa"></div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+  const map = L.map('mapa').setView([19.4326, -99.1332], 12); // CDMX por defecto
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap'
+  }).addTo(map);
+
+  let marcadores = {};
+
+  async function actualizar() {
+    try {
+      const r = await fetch('/api/activos?clave=${clave}');
+      if (!r.ok) throw new Error('Error al pedir datos');
+      const datos = await r.json();
+
+      document.getElementById('estado').textContent =
+        datos.length + ' conductora(s) en ruta - actualizado ' + new Date().toLocaleTimeString();
+
+      const idsActuales = new Set();
+
+      datos.forEach(c => {
+        if (c.lat == null || c.lng == null) return;
+        idsActuales.add(c.telegram_id);
+        const popupTexto = c.nombre + '<br>Placas: ' + c.placas +
+          '<br>Actualizado: ' + new Date(c.ultima_actualizacion).toLocaleTimeString();
+
+        if (marcadores[c.telegram_id]) {
+          marcadores[c.telegram_id].setLatLng([c.lat, c.lng]);
+          marcadores[c.telegram_id].setPopupContent(popupTexto);
+        } else {
+          marcadores[c.telegram_id] = L.marker([c.lat, c.lng]).addTo(map).bindPopup(popupTexto);
+        }
+      });
+
+      // Quitar marcadores de quien ya no está activa
+      Object.keys(marcadores).forEach(id => {
+        if (!idsActuales.has(Number(id))) {
+          map.removeLayer(marcadores[id]);
+          delete marcadores[id];
+        }
+      });
+    } catch (e) {
+      document.getElementById('estado').textContent = 'No se pudo actualizar (reintentando...)';
+    }
+  }
+
+  actualizar();
+  setInterval(actualizar, 15000);
+</script>
+</body>
+</html>`);
+});
+
+app.get("/api/activos", async (req, res) => {
+  if (!claveValida(req)) {
+    res.status(403).json({ error: "clave inválida" });
+    return;
+  }
+  try {
+    const r = await pool.query(`
+      SELECT c.telegram_id, c.nombre, c.placas, t.ultima_lat AS lat, t.ultima_lng AS lng, t.ultima_actualizacion
+      FROM turnos t
+      JOIN conductoras c ON c.telegram_id = t.telegram_id
+      WHERE t.estado = 'activo'
+      ORDER BY t.ultima_actualizacion DESC NULLS LAST
+    `);
+    res.json(r.rows);
+  } catch (err) {
+    console.error("Error al consultar activos:", err.message);
+    res.status(500).json({ error: "error interno" });
+  }
+});
+
 async function main() {
   await initDb();
   bot.start();
   console.log("Bot iniciado correctamente");
+
+  const port = process.env.PORT || 3000;
+  app.listen(port, () => {
+    console.log("Servidor del mapa escuchando en el puerto " + port);
+  });
 }
 
 main().catch((err) => {
