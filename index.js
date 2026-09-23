@@ -320,12 +320,22 @@ app.get("/mapa", (req, res) => {
 <div id="mapa"></div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-  const map = L.map('mapa').setView([19.4326, -99.1332], 12); // CDMX por defecto
+  // Arregla un bug conocido de Leaflet: los íconos por defecto no cargan
+  // bien cuando la página viene de un CDN, y el marcador queda invisible.
+  delete L.Icon.Default.prototype._getIconUrl;
+  L.Icon.Default.mergeOptions({
+    iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+    iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+    shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+  });
+
+  const map = L.map('mapa').setView([19.4326, -99.1332], 12); // CDMX por defecto, mientras no hay datos
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; OpenStreetMap'
   }).addTo(map);
 
   let marcadores = {};
+  let primeraCarga = true;
 
   async function actualizar() {
     try {
@@ -359,6 +369,13 @@ app.get("/mapa", (req, res) => {
           delete marcadores[id];
         }
       });
+
+      // La primera vez que hay datos, mover la cámara para que se vean todas
+      if (primeraCarga && Object.keys(marcadores).length > 0) {
+        const grupo = L.featureGroup(Object.values(marcadores));
+        map.fitBounds(grupo.getBounds().pad(0.3));
+        primeraCarga = false;
+      }
     } catch (e) {
       document.getElementById('estado').textContent = 'No se pudo actualizar (reintentando...)';
     }
