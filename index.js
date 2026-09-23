@@ -320,14 +320,18 @@ app.get("/mapa", (req, res) => {
 <div id="mapa"></div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-  // Arregla un bug conocido de Leaflet: los íconos por defecto no cargan
-  // bien cuando la página viene de un CDN, y el marcador queda invisible.
-  delete L.Icon.Default.prototype._getIconUrl;
-  L.Icon.Default.mergeOptions({
-    iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-    iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-    shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-  });
+  // En vez de usar el ícono de imagen de Leaflet (que puede no cargar según
+  // la red del que ve el mapa), dibujamos un círculo de color con código.
+  function crearMarcador(lat, lng) {
+    return L.circleMarker([lat, lng], {
+      radius: 10,
+      fillColor: '#e63946',
+      color: '#ffffff',
+      weight: 2,
+      opacity: 1,
+      fillOpacity: 1
+    });
+  }
 
   const map = L.map('mapa').setView([19.4326, -99.1332], 12); // CDMX por defecto, mientras no hay datos
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -358,7 +362,7 @@ app.get("/mapa", (req, res) => {
           marcadores[c.telegram_id].setLatLng([c.lat, c.lng]);
           marcadores[c.telegram_id].setPopupContent(popupTexto);
         } else {
-          marcadores[c.telegram_id] = L.marker([c.lat, c.lng]).addTo(map).bindPopup(popupTexto);
+          marcadores[c.telegram_id] = crearMarcador(c.lat, c.lng).addTo(map).bindPopup(popupTexto);
         }
       });
 
