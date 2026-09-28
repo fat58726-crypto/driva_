@@ -264,18 +264,24 @@ bot.on("message:text", async (ctx) => {
 
 async function guardarUbicacion(userId, lat, lng) {
   const activo = await turnoActivo(userId);
-  if (!activo) return; // si no tiene turno activo, ignoramos la ubicación
+  if (!activo) return false; // si no tiene turno activo, ignoramos la ubicación
 
   await pool.query(
     `UPDATE turnos SET ultima_lat = $1, ultima_lng = $2, ultima_actualizacion = NOW(), nivel_alerta = 0
      WHERE id = $3`,
     [lat, lng, activo.id]
   );
+  return true;
 }
 
 bot.on("message:location", async (ctx) => {
   const { latitude, longitude } = ctx.message.location;
-  await guardarUbicacion(ctx.from.id, latitude, longitude);
+  const guardada = await guardarUbicacion(ctx.from.id, latitude, longitude);
+  if (guardada) {
+    ctx.reply("📍 Ubicación recibida. Ya apareces en el mapa.");
+  } else {
+    ctx.reply("Recibí tu ubicación, pero no tienes un turno activo. Escribe /turno primero y luego vuelve a mandarla.");
+  }
 });
 
 // Las actualizaciones de "ubicación en vivo" llegan como ediciones de mensaje.
@@ -348,7 +354,8 @@ app.get("/mapa", (req, res) => {
       const datos = await r.json();
 
       document.getElementById('estado').textContent =
-        datos.length + ' conductora(s) en ruta - actualizado ' + new Date().toLocaleTimeString();
+        datos.length + ' conductora(s) en ruta (' + datos.filter(d => d.lat != null).length +
+        ' con ubicación) - actualizado ' + new Date().toLocaleTimeString();
 
       const idsActuales = new Set();
 
